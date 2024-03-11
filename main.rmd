@@ -1,0 +1,78 @@
+---
+title: "Flight-Price-Prediction-Using-R"
+output: html_notebook
+---
+
+```{r}
+# Load necessary libraries
+library(tidyverse)  # For data manipulation
+library(readxl)     # For reading Excel files
+
+# Load the dataset
+dataset <- read.csv("https://raw.githubusercontent.com/paulreonal/Flight-Price-Prediction-Using-R/main/Data_Train.csv")
+
+# Load train_data and test_data from Excel files
+train_data <- dataset
+
+# Print the dimensions of train_data and test_data
+print(dim(train_data))
+
+# View the first few rows of train_data
+head(train_data)
+
+# Checking missing value in dataset
+any(is.na(train_data))
+
+# Summarize missing values in train_data
+colSums(is.na(train_data))
+
+# Checking for duplicate values in train_data
+duplicated_rows <- train_data[duplicated(train_data), ]
+duplicated_rows
+
+# Drop duplicate values from train_data
+train_data <- distinct(train_data, .keep_all = TRUE)
+
+# Adjust "Additional_Info" column
+train_data$Additional_Info <- ifelse(train_data$Additional_Info == "No Info", "No info", train_data$Additional_Info)
+
+# Check the frequency of values in "Additional_Info" column
+table(train_data$Additional_Info)
+
+```
+```{r}
+# Duration convert hours in min
+train_data$Duration <- gsub("h", "*60", train_data$Duration)
+train_data$Duration <- gsub("m", "*1", train_data$Duration)
+train_data$Duration <- sapply(train_data$Duration, function(x) eval(parse(text = x)))
+
+# Date_of_Journey
+train_data$Journey_day <- as.integer(strsplit(train_data$Date_of_Journey, "/")[[1]][1])
+train_data$Journey_month <- as.integer(strsplit(train_data$Date_of_Journey, "/")[[1]][2])
+train_data <- train_data[, !names(train_data) %in% c("Date_of_Journey")]
+
+# Dep_Time
+train_data$Dep_hour <- as.integer(format(as.POSIXct(train_data$Dep_Time, format="%H:%M"), "%H"))
+train_data$Dep_min <- as.integer(format(as.POSIXct(train_data$Dep_Time, format="%H:%M"), "%M"))
+train_data <- train_data[, !names(train_data) %in% c("Dep_Time")]
+
+# Arrival_Time
+train_data$Arrival_hour <- as.integer(format(as.POSIXct(train_data$Arrival_Time, format="%H:%M"), "%H"))
+train_data$Arrival_min <- as.integer(format(as.POSIXct(train_data$Arrival_Time, format="%H:%M"), "%M"))
+train_data <- train_data[, !names(train_data) %in% c("Arrival_Time")]
+
+# Count of flights by airline
+table(train_data$Airline)
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)    # For plotting
+
+# Plot count of flights with different Airlines
+ggplot(train_data, aes(x = Airline)) +
+  geom_bar() +
+  labs(title = "Count of flights with different Airlines", x = "Airline", y = "Count of flights") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5, color="black")
+
+```
