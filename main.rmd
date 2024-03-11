@@ -16,35 +16,56 @@ train_data <- dataset
 
 # Print the dimensions of train_data and test_data
 print(dim(train_data))
+```
 
+```{r}
 # View the first few rows of train_data
 head(train_data)
+```
 
+```{r}
 # Checking missing value in dataset
-any(is.na(train_data))
+anyNA(train_data)
+```
 
+```{r}
 # Summarize missing values in train_data
 colSums(is.na(train_data))
+```
+```{r}
+# Impute missing values in X_train using median imputation
+pre_proc <- preProcess(train_data, method = "medianImpute")
+train_data <- predict(pre_proc, train_data)
+```
 
+```{r}
+# Checking missing value in dataset
+anyNA(train_data)
+```
+
+```{r}
 # Checking for duplicate values in train_data
 duplicated_rows <- train_data[duplicated(train_data), ]
 duplicated_rows
+```
 
+```{r}
 # Drop duplicate values from train_data
 train_data <- distinct(train_data, .keep_all = TRUE)
+```
 
+```{r}
 # Adjust "Additional_Info" column
 train_data$Additional_Info <- ifelse(train_data$Additional_Info == "No Info", "No info", train_data$Additional_Info)
 
 # Check the frequency of values in "Additional_Info" column
 table(train_data$Additional_Info)
-
 ```
+
 ```{r}
-# Duration convert hours in min
-train_data$Duration <- gsub("h", "*60", train_data$Duration)
-train_data$Duration <- gsub("m", "*1", train_data$Duration)
-train_data$Duration <- sapply(train_data$Duration, function(x) eval(parse(text = x)))
+# Convert the Duration column into minutes
+train_data$Duration <- as.integer(substring(train_data$Duration, 1, regexpr("h", train_data$Duration) - 1)) * 60 +
+                       as.integer(substring(train_data$Duration, regexpr(" ", train_data$Duration) + 1, nchar(train_data$Duration) - 1))
 
 # Date_of_Journey
 train_data$Journey_day <- as.integer(strsplit(train_data$Date_of_Journey, "/")[[1]][1])
@@ -64,15 +85,174 @@ train_data <- train_data[, !names(train_data) %in% c("Arrival_Time")]
 # Count of flights by airline
 table(train_data$Airline)
 ```
+
 ```{r}
 # Load necessary libraries
 library(ggplot2)    # For plotting
 
 # Plot count of flights with different Airlines
 ggplot(train_data, aes(x = Airline)) +
-  geom_bar() +
+  geom_bar(fill = "green") +
   labs(title = "Count of flights with different Airlines", x = "Airline", y = "Count of flights") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  geom_text(stat='count', aes(label=..count..), vjust=-0.5, color="black")
+  geom_text(stat='count', aes(label=after_stat(count)), vjust=-0.5, color="black")
 
+```
+```{r}
+# Set the size of the plot
+options(repr.plot.width=15, repr.plot.height=10)
+
+# Create the plot
+ggplot(train_data, aes(x = Airline, y = Price)) +
+  geom_point(color = "green") +   # Scatter plot
+  labs(title = "Price VS Airlines",  # Title of the plot
+       x = "Airline",                # X-axis label
+       y = "Price of ticket") +      # Y-axis label
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  # Rotate x-axis labels
+```
+```{r}
+library(dplyr)
+
+# Replace specific values in the 'Airline' column
+train_data <- train_data %>%
+  mutate(Airline = ifelse(Airline %in% c('Multiple carriers Premium economy',
+                                          'Jet Airways Business',
+                                          'Vistara Premium economy',
+                                          'Trujet'), 'Other', Airline))
+
+```
+```{r}
+library(ggplot2)
+
+# Set the size of the plot
+options(repr.plot.width=15, repr.plot.height=10)
+
+# Create the plot
+ggplot(train_data, aes(x = Additional_Info, y = Price)) +
+  geom_point(color = "green") +   # Scatter plot
+  labs(title = "Price VS Additional Information",  # Title of the plot
+       x = "Information",                # X-axis label
+       y = "Price of ticket") +      # Y-axis label
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  # Rotate x-axis labels
+
+```
+```{r}
+# Count the occurrences of unique values in the 'Additional_Info' column
+table(train_data$Additional_Info)
+```
+```{r}
+# Replace specific values in the 'Additional_Info' column
+train_data$Additional_Info <- gsub('Change airports|Business class|1 Short layover|Red-eye flight|2 Long layover',
+                                   'Other', train_data$Additional_Info)
+```
+
+```{r}
+head(train_data)
+```
+```{r}
+library(dplyr)
+
+# Remove the "Price" column from train_data
+data <- select(train_data, -Price)
+
+# Select categorical variables
+train_categorical_data <- select_if(data, function(x) !is.numeric(x))
+
+# Select numerical variables
+train_numerical_data <- select_if(data, function(x) is.numeric(x))
+
+# Display the first few rows of train_categorical_data
+head(train_categorical_data)
+```
+```{r}
+# Convert categorical variables to numerical
+train_categorical_data <- lapply(train_categorical_data, function(x) as.numeric(as.factor(x)))
+
+# Display the first few rows of each numerical column in train_categorical_data
+lapply(train_categorical_data, head)
+```
+```{r}
+# Concatenate categorical and numerical data frames column-wise
+X <- cbind(train_categorical_data, train_numerical_data)
+
+# Extract the 'Price' column
+y <- train_data$Price
+
+# Display the first few rows of X and y
+head(X)
+
+```
+```{r}
+head(y)
+```
+
+```{r}
+# Load the required libraries
+library(caret)
+library(randomForest)
+
+# Split the dataset into training and testing sets
+set.seed(42)  # Set the random seed for reproducibility
+train_index <- createDataPartition(y, p = 0.7, list = FALSE)
+X_train <- X[train_index, ]
+y_train <- y[train_index]
+X_test <- X[-train_index, ]
+y_test <- y[-train_index]
+
+# Define the parameter grid for Random Forest
+tuned_params <- expand.grid(n_estimators = c(100, 200, 300, 400, 500),
+                            mtry = c(1:ncol(X_train)),  # Specify values for mtry
+                            min_samples_split = c(2, 5, 10),
+                            min_samples_leaf = c(1, 2, 4))
+```
+
+```{r}
+# Check for missing values in X_train
+missing_values <- colSums(is.na(X_train))
+print(missing_values)
+
+```
+
+
+```{r}
+# Impute missing values in X_train using median imputation
+pre_proc <- preProcess(X_train, method = "medianImpute")
+X_train <- predict(pre_proc, X_train)
+```
+
+```{r}
+# Train the Random Forest model using RandomizedSearchCV
+set.seed(42)  # Set the random seed for reproducibility
+random_regressor <- train(x = X_train, y = y_train,
+                          method = "rf",
+                          tuneLength = 15,  # Specify the number of parameter settings to evaluate
+                          trControl = trainControl(method = "cv", number = 5),
+                          metric = "MAE")
+```
+
+```{r}
+# Make predictions on the training and testing sets
+y_train_pred <- predict(random_regressor, X_train)
+y_test_pred <- predict(random_regressor, X_test)
+```
+
+```{r}
+# Evaluate the model performance
+train_rmse <- sqrt(mean((y_train - y_train_pred)^2))
+train_mape <- mean(abs((y_train - y_train_pred) / y_train)) * 100
+train_r2 <- cor(y_train, y_train_pred)^2
+
+test_rmse <- sqrt(mean((y_test - y_test_pred)^2))
+test_mape <- mean(abs((y_test - y_test_pred) / y_test)) * 100
+test_r2 <- cor(y_test, y_test_pred)^2
+
+```
+
+```{r}
+# Print the evaluation results
+cat("Train Results for Random Forest Regressor Model:\n")
+cat("--------------------------------------------------\n")
+cat("Root mean squared error: ", train_rmse, "\n")
+cat("Mean absolute % error: ", round(train_mape), "\n")
+cat("R-squared: ", train_r2, "\n")
 ```
